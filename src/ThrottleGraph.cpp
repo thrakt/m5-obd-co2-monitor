@@ -1,13 +1,24 @@
 #include "ThrottleGraph.hpp"
+#include "Display.hpp"
+#include <algorithm>
+
+// RGB565色定数の定義（M5GFXから独立）
+#define TFT_BLACK 0x0000
+#define TFT_DARKGREY 0x4208
+#define TFT_CYAN 0x07FF
+#define TFT_GREEN 0x07E0
+#define TFT_ORANGE 0xFD20
+#define TFT_RED 0xF800
+#define top_right 7 // M5GFX datum constant
 
 ThrottleGraph::ThrottleGraph()
-    : _display(nullptr), _x(0), _y(0), _w(0), _h(0), _historySize(160),
+    : _canvas(nullptr), _x(0), _y(0), _w(0), _h(0), _historySize(160),
       _updateIntervalMs(100) {}
 
-void ThrottleGraph::begin(M5GFX *display, int16_t x, int16_t y, int16_t w,
+void ThrottleGraph::begin(GraphCanvas *canvas, int16_t x, int16_t y, int16_t w,
                           int16_t h, uint16_t historySize,
                           uint16_t updateIntervalMs) {
-  _display = display;
+  _canvas = canvas;
   _x = x;
   _y = y;
   _w = w;
@@ -16,7 +27,9 @@ void ThrottleGraph::begin(M5GFX *display, int16_t x, int16_t y, int16_t w,
   _updateIntervalMs = updateIntervalMs;
 
   // スプライトを作成（チラツキ防止）
-  _sprite.createSprite(_w, _h);
+  if (_canvas) {
+    _canvas->createCanvas(_w, _h);
+  }
 
   // 履歴バッファを確保
   _throttleHistory.clear();
@@ -25,7 +38,7 @@ void ThrottleGraph::begin(M5GFX *display, int16_t x, int16_t y, int16_t w,
 
 void ThrottleGraph::addData(float throttlePercent) {
   // 範囲を0-100%に制限
-  throttlePercent = constrain(throttlePercent, 0.0f, 100.0f);
+  throttlePercent = std::min(std::max(throttlePercent, 0.0f), 100.0f);
 
   // データを追加
   _throttleHistory.push_back(throttlePercent);
@@ -37,20 +50,20 @@ void ThrottleGraph::addData(float throttlePercent) {
 }
 
 void ThrottleGraph::draw() {
-  if (!_display || _throttleHistory.empty()) {
+  if (!_canvas || _throttleHistory.empty()) {
     return;
   }
 
   // スプライトに描画（背景クリア）
-  _sprite.fillSprite(TFT_BLACK);
+  _canvas->fillCanvas(TFT_BLACK);
 
   // グリッドラインを描画 (25%, 50%, 75%)
-  _sprite.drawLine(0, _h * 3 / 4, _w, _h * 3 / 4, 0x2104); // 25%
-  _sprite.drawLine(0, _h / 2, _w, _h / 2, 0x4208);         // 50%
-  _sprite.drawLine(0, _h / 4, _w, _h / 4, 0x2104);         // 75%
+  _canvas->drawLine(0, _h * 3 / 4, _w, _h * 3 / 4, 0x2104); // 25%
+  _canvas->drawLine(0, _h / 2, _w, _h / 2, 0x4208);         // 50%
+  _canvas->drawLine(0, _h / 4, _w, _h / 4, 0x2104);         // 75%
 
   // 底辺のベースライン
-  _sprite.drawLine(0, _h - 1, _w, _h - 1, TFT_DARKGREY);
+  _canvas->drawLine(0, _h - 1, _w, _h - 1, TFT_DARKGREY);
 
   // データポイント数に応じた描画
   int dataSize = _throttleHistory.size();
@@ -60,13 +73,13 @@ void ThrottleGraph::draw() {
       float currentValue = _throttleHistory[0];
       char buf[16];
       snprintf(buf, sizeof(buf), "%.0f%%", currentValue);
-      _sprite.setFont(&fonts::FreeSansBold12pt7b);
-      _sprite.setTextSize(1);
-      _sprite.setTextDatum(top_right);
-      _sprite.setTextColor(getThrottleColor(currentValue), TFT_BLACK);
-      _sprite.drawString(buf, _w - 5, 5);
+      _canvas->setFont(&fonts::FreeSansBold12pt7b);
+      _canvas->setTextSize(1);
+      _canvas->setTextDatum(top_right);
+      _canvas->setTextColor(getThrottleColor(currentValue), TFT_BLACK);
+      _canvas->drawString(buf, _w - 5, 5);
     }
-    _sprite.pushSprite(_display, _x, _y);
+    _canvas->pushToDisplay(_x, _y);
     return;
   }
 
@@ -100,13 +113,13 @@ void ThrottleGraph::draw() {
     uint16_t color = getThrottleColor(val2);
 
     // 線を描画
-    _sprite.drawLine(x1, y1, x2, y2, color);
+    _canvas->drawLine(x1, y1, x2, y2, color);
 
     // 線を太くするために上下に1ピクセルずつ追加
     if (y1 > 0)
-      _sprite.drawLine(x1, y1 - 1, x2, y2 - 1, color);
+      _canvas->drawLine(x1, y1 - 1, x2, y2 - 1, color);
     if (y1 < _h - 1)
-      _sprite.drawLine(x1, y1 + 1, x2, y2 + 1, color);
+      _canvas->drawLine(x1, y1 + 1, x2, y2 + 1, color);
   }
 
   // 現在値を右端に表示
@@ -115,22 +128,22 @@ void ThrottleGraph::draw() {
     char buf[16];
     snprintf(buf, sizeof(buf), "%.0f%%", currentValue);
 
-    _sprite.setFont(&fonts::FreeSansBold12pt7b);
-    _sprite.setTextSize(1);
-    _sprite.setTextDatum(top_right);
-    _sprite.setTextColor(getThrottleColor(currentValue), TFT_BLACK);
-    _sprite.drawString(buf, _w - 5, 5);
+    _canvas->setFont(&fonts::FreeSansBold12pt7b);
+    _canvas->setTextSize(1);
+    _canvas->setTextDatum(top_right);
+    _canvas->setTextColor(getThrottleColor(currentValue), TFT_BLACK);
+    _canvas->drawString(buf, _w - 25, 10);
   }
 
   // スプライトをディスプレイに転送（一度の転送でチラツキ防止）
-  _sprite.pushSprite(_display, _x, _y);
+  _canvas->pushToDisplay(_x, _y);
 }
 
 void ThrottleGraph::clear() {
   _throttleHistory.clear();
-  if (_display) {
-    _sprite.fillSprite(TFT_BLACK);
-    _sprite.pushSprite(_display, _x, _y);
+  if (_canvas) {
+    _canvas->fillCanvas(TFT_BLACK);
+    _canvas->pushToDisplay(_x, _y);
   }
 }
 

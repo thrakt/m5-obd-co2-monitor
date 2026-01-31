@@ -25,8 +25,8 @@ void DummyCanManager::update() {
   // Simulate Voltage: 13.0 to 14.5 V cycle
   _batteryVoltage = 13.0 + ((now % 5000) / 5000.0) * 1.5;
 
-  // Print simulation status occasionally
-  if (now - _lastDebugTime >= DEBUG_INTERVAL) {
+  // Print simulation status occasionally (only if debug is enabled)
+  if (_debugEnabled && (now - _lastDebugTime >= DEBUG_INTERVAL)) {
     Serial.printf("[SIM] Throttle: %d%%, Temp: %d C, Volt: %.2f V\n",
                   _throttlePos, _coolantTemp, _batteryVoltage);
     _lastDebugTime = now;
@@ -40,3 +40,7 @@ uint8_t DummyCanManager::getThrottlePos() { return _throttlePos; }
 float DummyCanManager::getBatteryVoltage() { return _batteryVoltage; }
 
 bool DummyCanManager::isDataValid() { return _dataValid; }
+
+void DummyCanManager::setDebugEnabled(bool enabled) { _debugEnabled = enabled; }
+
+bool DummyCanManager::isDebugEnabled() const { return _debugEnabled; }

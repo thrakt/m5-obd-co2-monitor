@@ -1,5 +1,65 @@
 #include "Display.hpp"
 
+// GraphCanvas implementation
+GraphCanvas::GraphCanvas() : _canvas(nullptr), _display(nullptr) {}
+
+void GraphCanvas::createCanvas(int16_t width, int16_t height) {
+  if (_canvas) {
+    _canvas->createSprite(width, height);
+  }
+}
+
+void GraphCanvas::pushToDisplay(int16_t x, int16_t y) {
+  if (_canvas && _display) {
+    _canvas->pushSprite(_display, x, y);
+  }
+}
+
+void GraphCanvas::fillCanvas(uint16_t color) {
+  if (_canvas) {
+    _canvas->fillSprite(color);
+  }
+}
+
+void GraphCanvas::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+                           uint16_t color) {
+  if (_canvas) {
+    _canvas->drawLine(x0, y0, x1, y1, color);
+  }
+}
+
+void GraphCanvas::drawString(const char *text, int16_t x, int16_t y) {
+  if (_canvas) {
+    _canvas->drawString(text, x, y);
+  }
+}
+
+void GraphCanvas::setFont(const void *font) {
+  if (_canvas) {
+    _canvas->setFont((const lgfx::IFont *)font);
+  }
+}
+
+void GraphCanvas::setTextSize(uint8_t size) {
+  if (_canvas) {
+    _canvas->setTextSize(size);
+  }
+}
+
+void GraphCanvas::setTextDatum(uint8_t datum) {
+  if (_canvas) {
+    _canvas->setTextDatum(datum);
+  }
+}
+
+void GraphCanvas::setTextColor(uint16_t fgColor, uint16_t bgColor) {
+  if (_canvas) {
+    _canvas->setTextColor(fgColor, bgColor);
+  }
+}
+
+// Display implementation
+
 Display::Display() : _display(&M5.Display) {}
 
 void Display::begin() {
@@ -19,6 +79,10 @@ void Display::begin() {
 
   _cabinSprite.createSprite(CABIN_W, CABIN_H);
   _cabinSprite.setTextDatum(MC_DATUM);
+
+  // グラフキャンバスの初期化
+  _graphCanvas._canvas = &_graphSprite;
+  _graphCanvas._display = _display;
 }
 
 void Display::clear() { _display->fillScreen(TFT_BLACK); }
@@ -162,9 +226,11 @@ void Display::updateCabinEnv(float tempC, float humidity) {
 }
 
 void Display::updateThrottleGraph() {
-  // ThrottleGraph draws directly to the display
+  // ThrottleGraph draws via GraphCanvas
   // This method is kept for API consistency but does nothing
 }
+
+GraphCanvas *Display::getGraphCanvas() { return &_graphCanvas; }
 
 uint16_t Display::getTempColor(int16_t tempC) {
   if (tempC < 60) {

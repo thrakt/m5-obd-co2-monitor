@@ -18,6 +18,10 @@ public:
 
   bool isDataValid();
 
+  // Debug control
+  void setDebugEnabled(bool enabled);
+  bool isDebugEnabled() const;
+
 private:
   // Data cache
   int16_t _coolantTemp;
@@ -30,6 +34,8 @@ private:
 
   static constexpr unsigned long DEBUG_INTERVAL = 2000; // ms
   unsigned long _lastDebugTime = 0;
+
+  bool _debugEnabled = false; // Debug flag
 };
 
 #endif // DUMMY_CAN_MANAGER_HPP

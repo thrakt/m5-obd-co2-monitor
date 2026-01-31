@@ -89,8 +89,8 @@ void setup() {
   // Initialize Throttle Graph
   const uint16_t GRAPH_HISTORY_SIZE = 320;
   const uint16_t GRAPH_UPDATE_INTERVAL_MS = 500;
-  throttleGraph.begin(&M5.Display, 0, 190, 320, 50, GRAPH_HISTORY_SIZE,
-                      GRAPH_UPDATE_INTERVAL_MS);
+  throttleGraph.begin(display.getGraphCanvas(), 0, 190, 320, 50,
+                      GRAPH_HISTORY_SIZE, GRAPH_UPDATE_INTERVAL_MS);
   Serial.printf("Throttle Graph: %d data points, %.1f sec history\n",
                 GRAPH_HISTORY_SIZE, throttleGraph.getHistoryDurationSeconds());
   display.showInitMessage("Throttle Graph initialized");
