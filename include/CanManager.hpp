@@ -19,6 +19,10 @@ public:
 
   bool isDataValid();
 
+  // Debug control
+  void setDebugEnabled(bool enabled);
+  bool isDebugEnabled() const;
+
 private:
   // OBD2 PIDs
   static constexpr uint8_t PID_COOLANT_TEMP = 0x05;
@@ -44,6 +48,8 @@ private:
   static constexpr unsigned long RESPONSE_TIMEOUT = 500; // ms
   static constexpr unsigned long DEBUG_INTERVAL = 2000;  // ms
   unsigned long _lastDebugTime = 0;
+
+  bool _debugEnabled = false; // Debug flag
 
   // Helper methods
   void requestPid(uint8_t pid);

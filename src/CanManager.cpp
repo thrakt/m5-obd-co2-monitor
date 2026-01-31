@@ -37,7 +37,7 @@ void CanManager::update() {
   }
 
   // Debug Status Logging
-  if (now - _lastDebugTime >= DEBUG_INTERVAL) {
+  if (_debugEnabled && now - _lastDebugTime >= DEBUG_INTERVAL) {
     twai_status_info_t status;
     if (twai_get_status_info(&status) == ESP_OK) {
       const char *stateStr = "UNKNOWN";
@@ -89,6 +89,10 @@ float CanManager::getBatteryVoltage() { return _batteryVoltage; }
 
 bool CanManager::isDataValid() { return _dataValid; }
 
+void CanManager::setDebugEnabled(bool enabled) { _debugEnabled = enabled; }
+
+bool CanManager::isDebugEnabled() const { return _debugEnabled; }
+
 // ... (previous content)
 
 void CanManager::requestPid(uint8_t pid) {
@@ -106,11 +110,15 @@ void CanManager::requestPid(uint8_t pid) {
   frame.data[7] = 0x00;
 
   if (ESP32Can.writeFrame(frame)) {
-    Serial.printf("[CAN] Request sent: PID=0x%02X\n", pid);
+    if (_debugEnabled) {
+      Serial.printf("[CAN] Request sent: PID=0x%02X\n", pid);
+    }
   } else {
-    Serial.printf(
-        "[CAN] Failed to send request: PID=0x%02X (Queue Full or Bus Error)\n",
-        pid);
+    if (_debugEnabled) {
+      Serial.printf("[CAN] Failed to send request: PID=0x%02X (Queue Full or "
+                    "Bus Error)\n",
+                    pid);
+    }
   }
 }
 
@@ -118,12 +126,14 @@ void CanManager::processResponse() {
   CanFrame frame;
   while (ESP32Can.readFrame(frame, 0)) {
     // Verbose logging for debugging "flow"
-    Serial.printf("[CAN RX] ID:0x%08X %s DLC:%d Data:", frame.identifier,
-                  frame.extd ? "EXT" : "STD", frame.data_length_code);
-    for (int i = 0; i < frame.data_length_code; i++) {
-      Serial.printf(" %02X", frame.data[i]);
+    if (_debugEnabled) {
+      Serial.printf("[CAN RX] ID:0x%08X %s DLC:%d Data:", frame.identifier,
+                    frame.extd ? "EXT" : "STD", frame.data_length_code);
+      for (int i = 0; i < frame.data_length_code; i++) {
+        Serial.printf(" %02X", frame.data[i]);
+      }
+      Serial.println();
     }
-    Serial.println();
 
     if (frame.identifier == OBD2_RESPONSE_ID ||
         (frame.identifier >= 0x7E8 && frame.identifier <= 0x7EF)) {
@@ -140,8 +150,10 @@ void CanManager::parseResponse(const CanFrame &frame) {
 
   // Check for positive response (Mode + 0x40)
   if (frame.data[1] != 0x41) {
-    Serial.printf("[CAN] Ignored response: Mode=0x%02X (Expected 0x41)\n",
-                  frame.data[1]);
+    if (_debugEnabled) {
+      Serial.printf("[CAN] Ignored response: Mode=0x%02X (Expected 0x41)\n",
+                    frame.data[1]);
+    }
     return;
   }
 
@@ -151,14 +163,18 @@ void CanManager::parseResponse(const CanFrame &frame) {
   case PID_COOLANT_TEMP:
     if (frame.data_length_code >= 4) {
       _coolantTemp = (int16_t)frame.data[3] - 40; // Formula: A - 40
-      Serial.printf("[CAN] Coolant Temp: %d C\n", _coolantTemp);
+      if (_debugEnabled) {
+        Serial.printf("[CAN] Coolant Temp: %d C\n", _coolantTemp);
+      }
     }
     break;
 
   case PID_THROTTLE_POS:
     if (frame.data_length_code >= 4) {
       _throttlePos = (frame.data[3] * 100) / 255; // Formula: (A * 100) / 255
-      Serial.printf("[CAN] Throttle: %d %%\n", _throttlePos);
+      if (_debugEnabled) {
+        Serial.printf("[CAN] Throttle: %d %%\n", _throttlePos);
+      }
     }
     break;
 
@@ -166,11 +182,15 @@ void CanManager::parseResponse(const CanFrame &frame) {
     if (frame.data_length_code >= 5) {
       uint16_t raw = (frame.data[3] << 8) | frame.data[4];
       _batteryVoltage = raw / 1000.0; // Formula: ((A * 256) + B) / 1000
-      Serial.printf("[CAN] Voltage: %.2f V\n", _batteryVoltage);
+      if (_debugEnabled) {
+        Serial.printf("[CAN] Voltage: %.2f V\n", _batteryVoltage);
+      }
     }
     break;
   default:
-    Serial.printf("[CAN] Parsed unknown PID: 0x%02X\n", pid);
+    if (_debugEnabled) {
+      Serial.printf("[CAN] Parsed unknown PID: 0x%02X\n", pid);
+    }
     break;
   }
 }

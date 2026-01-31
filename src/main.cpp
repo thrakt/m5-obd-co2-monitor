@@ -50,19 +50,20 @@ void setup() {
   display.showInitMessage("Display initialized");
 
   // Initialize CAN Manager
-  if (!canManager.begin()) {
+  if (canManager.begin()) {
+    display.showInitMessage("CAN Manager initialized");
+    canManager.setDebugEnabled(true);
+  } else {
     Serial.println("WARNING: CAN initialization failed!");
     display.showInitMessage("CAN init failed!");
-  } else {
-    display.showInitMessage("CAN Manager initialized");
   }
 
   // Initialize CO2 Sensor
-  if (!co2Sensor.begin()) {
+  if (co2Sensor.begin()) {
+    display.showInitMessage("CO2 Sensor initialized");
+  } else {
     Serial.println("WARNING: CO2 sensor initialization failed!");
     display.showInitMessage("CO2 Sensor init failed!");
-  } else {
-    display.showInitMessage("CO2 Sensor initialized");
   }
 
   // Initialize LED Manager
