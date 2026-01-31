@@ -23,6 +23,45 @@ void Display::begin() {
 
 void Display::clear() { _display->fillScreen(TFT_BLACK); }
 
+void Display::showInitMessage(const char *message) {
+  // Calculate next line position (simple scrolling effect)
+  static int lineY = 40;
+
+  if (lineY > 200) {
+    // Reset if we've gone too far down
+    clear();
+    lineY = 40;
+
+    // Redraw title
+    _display->setTextDatum(top_center);
+    _display->setTextSize(1);
+    _display->setFont(&fonts::FreeSansBold12pt7b);
+    _display->setTextColor(TFT_CYAN);
+    _display->drawString("System Initialization", 160, 10);
+    lineY = 40;
+  }
+
+  // Show first time title if this is the first message
+  if (lineY == 40) {
+    _display->setTextDatum(top_center);
+    _display->setTextSize(1);
+    _display->setFont(&fonts::FreeSansBold12pt7b);
+    _display->setTextColor(TFT_CYAN);
+    _display->drawString("System Initialization", 160, 10);
+  }
+
+  // Draw the message
+  _display->setTextDatum(top_left);
+  _display->setFont(&fonts::FreeSans9pt7b);
+  _display->setTextColor(TFT_GREEN);
+  _display->drawString("> ", 10, lineY);
+
+  _display->setTextColor(TFT_WHITE);
+  _display->drawString(message, 30, lineY);
+
+  lineY += 20;
+}
+
 void Display::updateDisplay() {
   _headerSprite.pushSprite(_display, HEADER_X, HEADER_Y);
   _throttleSprite.pushSprite(_display, THROTTLE_X, THROTTLE_Y);

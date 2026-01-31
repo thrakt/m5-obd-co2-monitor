@@ -19,6 +19,9 @@ public:
   void clear();
   void updateDisplay();
 
+  // Startup screen methods
+  void showInitMessage(const char *message);
+
 private:
   M5GFX *_display;
   M5Canvas _headerSprite;

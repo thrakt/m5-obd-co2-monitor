@@ -17,10 +17,12 @@ ThrottleGraph throttleGraph;
 // State management
 bool isHeaterReady = false;
 bool isCo2WarningActive = false;
-unsigned long startupTime = 0;
 
-// Constants
-const unsigned long STARTUP_GRACE_PERIOD = 10000; // 10 seconds
+// Timing for non-blocking updates
+const unsigned long GRAPH_UPDATE_INTERVAL_MS = 500;
+const unsigned long DISPLAY_UPDATE_INTERVAL_MS = 33;
+unsigned long lastGraphUpdate = 0;
+unsigned long lastDisplayUpdate = 0;
 
 // Heater thresholds
 const int16_t HEATER_READY_TEMP = 75;
@@ -28,10 +30,7 @@ const int16_t HEATER_COLD_TEMP = 60;
 
 // CO2 thresholds
 const uint16_t CO2_WARNING_THRESHOLD = 1500;
-
-bool isStartupGracePeriod() {
-  return (millis() - startupTime) < STARTUP_GRACE_PERIOD;
-}
+const uint16_t CO2_WARNING_DISABLE_THRESHOLD = 1250;
 
 void setup() {
   // Initialize M5Stack
@@ -44,28 +43,35 @@ void setup() {
   Serial.println("\n\n=== M5Stack CoreS3 OBD-CO2 Monitor ===");
   Serial.println("Initializing components...");
 
-  startupTime = millis();
-
   // Initialize display
   display.begin();
   display.clear();
   Serial.println("Display initialized");
+  display.showInitMessage("Display initialized");
 
   // Initialize CAN Manager
   if (!canManager.begin()) {
     Serial.println("WARNING: CAN initialization failed!");
+    display.showInitMessage("CAN init failed!");
+  } else {
+    display.showInitMessage("CAN Manager initialized");
   }
 
   // Initialize CO2 Sensor
   if (!co2Sensor.begin()) {
     Serial.println("WARNING: CO2 sensor initialization failed!");
+    display.showInitMessage("CO2 Sensor init failed!");
+  } else {
+    display.showInitMessage("CO2 Sensor initialized");
   }
 
   // Initialize LED Manager
   ledManager.begin();
+  display.showInitMessage("LED Manager initialized");
 
   // Initialize Sound Manager
   soundManager.begin();
+  display.showInitMessage("Sound Manager initialized");
 
   // Play a test sound on startup before initializing the visualizer
   Serial.println("Playing startup sound...");
@@ -87,9 +93,17 @@ void setup() {
                       GRAPH_UPDATE_INTERVAL_MS);
   Serial.printf("Throttle Graph: %d data points, %.1f sec history\n",
                 GRAPH_HISTORY_SIZE, throttleGraph.getHistoryDurationSeconds());
+  display.showInitMessage("Throttle Graph initialized");
 
   Serial.println("All components initialized");
   Serial.println("===================================\n");
+
+  // Startup grace period
+  Serial.println("Waiting for startup grace period (10 seconds)...");
+  display.showInitMessage("");
+  display.showInitMessage("Waiting for sensors...");
+  delay(10000);
+  Serial.println("Startup grace period finished. System ready.");
 }
 
 void loop() {
@@ -113,58 +127,50 @@ void loop() {
   display.updateThrottleGauge(throttlePos);
   display.updateCoolantTemp(coolantTemp);
   display.updateCabinEnv(cabinTemp, cabinHumidity);
-  // Add current throttle data to graph and update visualizer
-  static unsigned long lastGraphUpdate = 0;
+
+  // Throttle Graph Update
   unsigned long currentTime = millis();
-  if (currentTime - lastGraphUpdate >= 500) { // Update every 500ms
+  if (currentTime - lastGraphUpdate >= GRAPH_UPDATE_INTERVAL_MS) {
     throttleGraph.addData(throttlePos);
     throttleGraph.draw();
     display.updateThrottleGraph();
     lastGraphUpdate = currentTime;
   }
 
-  // Push all updates to the screen at once
-  static unsigned long lastDisplayUpdate = 0;
-  if (currentTime - lastDisplayUpdate >= 33) {
+  // Display Update
+  if (currentTime - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL_MS) {
     display.updateDisplay();
     lastDisplayUpdate = currentTime;
   }
 
   // Update LED (non-blocking breathing effect)
-  if (isStartupGracePeriod()) {
-    ledManager.clear();
-  } else {
-    ledManager.update(co2);
-  }
+  ledManager.update(co2);
 
   // === HEATER READY STATE MACHINE ===
-  if (!isStartupGracePeriod()) {
-    // Rule A: Enter heater ready state
-    if (!isHeaterReady && coolantTemp >= HEATER_READY_TEMP) {
-      isHeaterReady = true;
-      Serial.println(">> Heater ready! Temperature reached 75°C");
-      soundManager.playPon();
-    }
+  // Rule A: Enter heater ready state
+  if (!isHeaterReady && coolantTemp >= HEATER_READY_TEMP) {
+    isHeaterReady = true;
+    Serial.println(">> Heater ready! Temperature reached 75°C");
+    soundManager.playPon();
+  }
 
-    // Rule B: Exit heater ready state
-    if (isHeaterReady && coolantTemp <= HEATER_COLD_TEMP) {
-      isHeaterReady = false;
-      Serial.println(">> Cooling detected! Temperature dropped below 60°C");
-      soundManager.playPonPon();
-    }
+  // Rule B: Exit heater ready state
+  if (isHeaterReady && coolantTemp <= HEATER_COLD_TEMP) {
+    isHeaterReady = false;
+    Serial.println(">> Cooling detected! Temperature dropped below 60°C");
+    soundManager.playPonPon();
   }
 
   // === CO2 WARNING SYSTEM ===
   // Rule A: Enter CO2 warning state
-  if (!isStartupGracePeriod() && !isCo2WarningActive &&
-      co2 >= CO2_WARNING_THRESHOLD) {
+  if (!isCo2WarningActive && co2 >= CO2_WARNING_THRESHOLD) {
     isCo2WarningActive = true;
     Serial.printf(">> CO2 WARNING! Level: %d ppm\n", co2);
     soundManager.playBeee();
   }
 
   // Rule B: Exit CO2 warning state
-  if (isCo2WarningActive && co2 < CO2_WARNING_THRESHOLD) {
+  if (isCo2WarningActive && co2 < CO2_WARNING_DISABLE_THRESHOLD) {
     isCo2WarningActive = false;
     Serial.println(">> CO2 level is back to normal.");
   }
