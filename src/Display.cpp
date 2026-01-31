@@ -136,10 +136,11 @@ void Display::updateCoolantTemp(int16_t tempC) {
 
   _coolantSprite.setFont(&fonts::FreeSansBold12pt7b);
   uint16_t tempColor = getTempColor(tempC);
+  _coolantSprite.setTextSize(2);
   _coolantSprite.setTextColor(tempColor);
   char tempStr[16];
   snprintf(tempStr, sizeof(tempStr), "%d C", tempC);
-  _coolantSprite.drawString(tempStr, centerX, centerY + 10);
+  _coolantSprite.drawString(tempStr, centerX, centerY + 20);
 }
 
 void Display::updateCabinEnv(float tempC, float humidity) {
