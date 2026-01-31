@@ -79,8 +79,7 @@ void setup() {
 
   // Wait for the asynchronous sound to finish
   unsigned long soundStartTime = millis();
-  while (soundManager.isPlaying() &&
-         millis() - soundStartTime < 1000) { // Timeout after 1 sec
+  while (soundManager.isPlaying()) {
     soundManager.update();
     delay(10);
   }
