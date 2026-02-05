@@ -149,7 +149,8 @@ void Display::updateHeader(float voltage, uint16_t co2) {
   _headerSprite.drawString(voltageStr, 40, HEADER_H / 2 + 5);
 
   // Center: CO2 Value
-  _headerSprite.setTextColor(TFT_WHITE);
+  uint16_t co2Color = getCO2Color(co2);
+  _headerSprite.setTextColor(co2Color);
   char co2Str[16];
   snprintf(co2Str, sizeof(co2Str), "%d ppm", co2);
   _headerSprite.drawString(co2Str, HEADER_W / 2, HEADER_H / 2 + 5);
@@ -251,5 +252,15 @@ uint16_t Display::getThrottleColor(uint8_t percent) {
     return TFT_GREEN;
   } else {
     return TFT_ORANGE;
+  }
+}
+
+uint16_t Display::getCO2Color(uint16_t co2) {
+  if (co2 < 1250) {
+    return TFT_WHITE; // Safe level (LED off)
+  } else if (co2 < 1500) {
+    return TFT_ORANGE; // Caution (LED yellow breathing)
+  } else {
+    return TFT_RED; // Warning (LED red breathing)
   }
 }

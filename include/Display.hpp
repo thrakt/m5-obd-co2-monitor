@@ -96,6 +96,7 @@ private:
   // Helper methods
   uint16_t getTempColor(int16_t tempC);
   uint16_t getThrottleColor(uint8_t percent);
+  uint16_t getCO2Color(uint16_t co2);
 };
 
 #endif // DISPLAY_HPP
