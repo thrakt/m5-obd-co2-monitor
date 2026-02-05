@@ -2,8 +2,8 @@
 #include "driver/twai.h"
 
 namespace {
-const int CAN_TX_PIN = 18;
-const int CAN_RX_PIN = 17;
+const int CAN_TX_PIN = 17;
+const int CAN_RX_PIN = 18;
 } // namespace
 
 CanManager::CanManager()
@@ -171,9 +171,23 @@ void CanManager::parseResponse(const CanFrame &frame) {
 
   case PID_THROTTLE_POS:
     if (frame.data_length_code >= 4) {
-      _throttlePos = (frame.data[3] * 100) / 255; // Formula: (A * 100) / 255
+      // まず標準的なOBD-IIの計算式で0-100の範囲に変換
+      uint8_t rawThrottle = (frame.data[3] * 100) / 255;
+
+      // 15-75の範囲を0-100%に再マッピング
+      // 15以下は0%、75以上は100%にクランプ
+      if (rawThrottle <= 15) {
+        _throttlePos = 0;
+      } else if (rawThrottle >= 75) {
+        _throttlePos = 100;
+      } else {
+        // 線形変換: (rawThrottle - 15) / (75 - 15) * 100
+        _throttlePos = ((rawThrottle - 15) * 100) / 60;
+      }
+
       if (_debugEnabled) {
-        Serial.printf("[CAN] Throttle: %d %%\n", _throttlePos);
+        Serial.printf("[CAN] Throttle: raw=%d%%, mapped=%d%%\n", rawThrottle,
+                      _throttlePos);
       }
     }
     break;

@@ -26,7 +26,7 @@ public:
 private:
   // OBD2 PIDs
   static constexpr uint8_t PID_COOLANT_TEMP = 0x05;
-  static constexpr uint8_t PID_THROTTLE_POS = 0x11;
+  static constexpr uint8_t PID_THROTTLE_POS = 0x49;
   static constexpr uint8_t PID_CONTROL_MODULE_VOLTAGE = 0x42;
 
   // CAN identifiers
