@@ -80,7 +80,7 @@ void Display::begin() {
   _cabinSprite.createSprite(CABIN_W, CABIN_H);
   _cabinSprite.setTextDatum(MC_DATUM);
 
-  // グラフキャンバスの初期化
+  // Initialize graph canvas
   _graphCanvas._canvas = &_graphSprite;
   _graphCanvas._display = _display;
 }

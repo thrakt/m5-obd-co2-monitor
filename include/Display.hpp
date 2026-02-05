@@ -4,25 +4,25 @@
 #include <M5Unified.h>
 
 /**
- * @brief グラフ描画用のキャンバス抽象化クラス
+ * @brief Canvas abstraction class for graph drawing
  *
- * M5GFXの詳細を隠蔽し、ThrottleGraphが低レベルライブラリに
- * 直接依存しないようにするためのラッパー
+ * Wrapper to hide M5GFX details and prevent ThrottleGraph from
+ * directly depending on low-level libraries
  */
 class GraphCanvas {
 public:
   GraphCanvas();
 
-  // キャンバス管理
+  // Canvas management
   void createCanvas(int16_t width, int16_t height);
   void pushToDisplay(int16_t x, int16_t y);
 
-  // 描画プリミティブ
+  // Drawing primitives
   void fillCanvas(uint16_t color);
   void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color);
   void drawString(const char *text, int16_t x, int16_t y);
 
-  // テキスト設定
+  // Text settings
   void setFont(const void *font);
   void setTextSize(uint8_t size);
   void setTextDatum(uint8_t datum);
@@ -47,7 +47,7 @@ public:
   void updateCabinEnv(float tempC, float humidity);
   void updateThrottleGraph(); // Throttle graph is drawn via GraphCanvas
 
-  // グラフ描画用のキャンバスを取得
+  // Get canvas for graph drawing
   GraphCanvas *getGraphCanvas();
 
   void clear();
@@ -63,7 +63,7 @@ private:
   M5Canvas _coolantSprite;
   M5Canvas _cabinSprite;
 
-  // グラフ描画用のキャンバス
+  // Canvas for graph drawing
   GraphCanvas _graphCanvas;
   M5Canvas _graphSprite;
 

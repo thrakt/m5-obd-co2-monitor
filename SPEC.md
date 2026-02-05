@@ -11,16 +11,14 @@ OBD2(CAN)からの車両データ、SCD40センサーからのCO2/温湿度デ�
 - **Framework:** PlatformIO / Arduino Framework
 - **Ports & Connections:**
   - **Port A (I2C):** SCD40 CO2 Sensor Unit.
-  - **Port C (UART):** CAN Unit. **(TX=18, RX=17)**
+  - **Port C (UART):** CAN Unit. **(TX=17, RX=18)**
   - **Base Pin 5:** WS2812 LED Strip (10 LEDs).
   - **Built-in Speaker:** For notification sounds.
-  - **Built-in Mic:** For Audio Visualizer (currently not actively used in UI, but class exists for future use).
 - **Required Libraries:**
   - M5Unified
-  - FastLED (for Base LEDs)
-  - arduinoFFT (for Audio Visualizer)
-  - ESP32-TWAI-CAN (for OBD2)
-  - Sensirion I2C SCD4x
+  - FastLED@^3.6.0 (for Base LEDs)
+  - ESP32-TWAI-CAN@^1.0.1 (for OBD2)
+  - Sensirion I2C SCD4x@^0.4.0
 
 ## 3. Architecture & Class Design
 **原則:** ヘッダファイル(`.hpp`)と実装ファイル(`.cpp`)を分離し、メインループはノンブロッキングを維持する。
@@ -28,30 +26,33 @@ OBD2(CAN)からの車両データ、SCD40センサーからのCO2/温湿度デ�
 ### 3.1. Main Components
 1.  **`Display` (Class)**
     - 画面をHeader, Throttle Gauge, Coolant Temp, Cabin Envの4つのスプライトで管理。
-    - ThrottleGraph領域は別クラスが直接描画するため、スプライトなし。
+    - ThrottleGraph領域はGraphCanvasを介して別クラスが描画。
+    - `GraphCanvas`クラス: M5GFXの抽象化レイヤーとして機能し、ThrottleGraphからのハードウェア依存を排除。
 2.  **`CanManager` (Class)**
     - CAN通信管理（ESP32-TWAI-CAN使用）。
-    - PID: 水温(0x05), アクセル開度(0x11), 電圧(0x42)。
-    - 500Kbps CAN通信、Port C (TX=18, RX=17)。
+    - **PIDs:** 水温(0x05), アクセル開度(0x49), 電圧(0x42)。
+    - **通信設定:** 500Kbps CAN通信、Port C (TX=17, RX=18)。
+    - **リクエスト間隔:** 200ms（3つのPIDを順次ポーリング）。
+    - **タイムアウト:** 1.5秒（RESPONSE_TIMEOUT * 3）でデータ無効化。
+    - **デバッグ機能:** setDebugEnabled()でTWAIステータス詳細ログを有効化可能（2秒間隔）。
+    - **スロットル値変換:** 生のOBD2値を0-100%に変換後、15%以下を0%、75%以上を100%に、15-75%を線形補間で0-100%に再マッピング。
 3.  **`Co2Sensor` (Class)**
     - SCD40制御（I2C、Port A）。
-    - 温度オフセット補正機能あり。
-    - 5秒ごとにデータ更新。
+    - 温度オフセット補正機能あり（setTemperatureOffset()）。
+    - 5秒ごとにデータ更新（MEASUREMENT_INTERVAL）。
 4.  **`LedManager` (Class)**
     - Bottom LED制御 (WS2812、Pin 5、10 LEDs)。
-    - 呼吸エフェクト実装（3秒サイクル）。
+    - 呼吸エフェクト実装（3秒サイクル、30-255の輝度範囲）。
 5.  **`SoundManager` (Class)**
     - スピーカー制御（内蔵スピーカー使用）。
     - トーン合成による通知音生成（非同期シーケンス再生）。
     - 3種類の通知音: Pon（暖機完了）、PonPon（冷却検出）、Beee（CO2警告）。
 6.  **`ThrottleGraph` (Class)**
-    - アクセル開度の履歴グラフをスプライト使用で描画。
+    - アクセル開度の履歴グラフをGraphCanvas経由で描画。
     - 設定可能な履歴サイズと更新間隔。
     - 現在の設定: 320データポイント、500ms更新間隔（160秒履歴）。
-7.  **`AudioVisualizer` (Class)**
-    - マイク入力FFT解析とスペアナ機能を提供。
-    - **排他制御:** pause/resume機能により、音声再生時はマイク入力を停止する。
-    - **現在の使用状況:** 実装されているが、UIには現在組み込まれていない（将来の拡張用）。
+7.  **`DummyCanManager` (Class)**
+    - CAN Managerのモックテスト用クラス（実装済み、テスト用途）。
 
 ## 4. UI Layout Specifications (320x240)
 罫線なし。スプライトとマージンでゾーニング。
@@ -105,29 +106,30 @@ OBD2(CAN)からの車両データ、SCD40センサーからのCO2/温湿度デ�
     - 30-60%: Green (TFT_GREEN)
     - 60-80%: Orange (TFT_ORANGE)
     - >= 80%: Red (TFT_RED)
-- **Implementation:** ThrottleGraphクラスがスプライト経由で直接ディスプレイに描画。
+- **Implementation:** ThrottleGraphクラスがGraphCanvas経由でスプライトに描画し、ディスプレイに転送。
 
 ## 5. Functional Requirements & Logic
 
 ### 5.1. Display Update Strategy
 - 各ゾーンは専用スプライトで描画（Header, Throttle Gauge, Coolant, Cabin）。
-- ThrottleGraphは独自のスプライトで描画し、直接ディスプレイに転送。
+- ThrottleGraphはGraphCanvas経由で独自のスプライトで描画し、直接ディスプレイに転送。
 - メインループでは33ms間隔でスプライトをディスプレイにpush（約30fps）。
 - ThrottleGraphは500ms間隔でデータ追加と描画実行。
 
 ### 5.2. LED Notification (Breathing Effect)
-- **Interval:** ~3秒サイクル（正弦波による呼吸エフェクト）。
+- **Interval:** 3秒サイクル（正弦波による呼吸エフェクト、BREATHING_CYCLE_MS = 3000）。
 - **Logic:**
   - **CO2 < 1250 ppm:** OFF (Black).
   - **1250 <= CO2 < 1500:** YELLOW breathing.
   - **CO2 >= 1500:** RED breathing.
-- **Brightness Range:** 30-255（正弦波）。
+- **Brightness Range:** 30-255（正弦波で計算）。
 
 ### 5.3. Audio Notification (Tone Synthesis)
 非同期トーンシーケンス再生により、ノンブロッキング動作を実現。
 
 1.  **Heater Logic (Cyclic Flag):**
     - Variable: `isHeaterReady` (initially `false`).
+    - **Thresholds:** HEATER_READY_TEMP = 75, HEATER_COLD_TEMP = 60
     - **Rule A (Enter):** If `!isHeaterReady` AND `Temp >= 75°C`:
       - Set `isHeaterReady = true`.
       - Play "Pon" (High chime, 659Hz, 150ms).
@@ -135,9 +137,12 @@ OBD2(CAN)からの車両データ、SCD40センサーからのCO2/温湿度デ�
       - Set `isHeaterReady = false`.
       - Play "Pon-Pon" (High->Low chimes, 659Hz/523Hz, 150ms each).
 2.  **CO2 Warning:**
+    - **Thresholds:** CO2_WARNING_THRESHOLD = 1500, CO2_WARNING_DISABLE_THRESHOLD = 1250
     - **Trigger:** CO2 >= 1500 ppm (初回検出時のみ再生).
     - **Sound:** "Beee" (800Hz, 500ms).
-    - **Logic:** CO2 >= 1500でwarning状態に入り、1回だけBeee再生。CO2 < 1500で状態解除。
+    - **Logic:** 
+      - CO2 >= 1500 ppmで`isCo2WarningActive = true`となり、1回だけBeee再生。
+      - CO2 < 1250 ppmで`isCo2WarningActive = false`となり、状態解除。
 
 **Sound Playback Implementation:**
 - `SoundManager`は非同期トーンシーケンス方式を採用。
@@ -145,28 +150,69 @@ OBD2(CAN)からの車両データ、SCD40センサーからのCO2/温湿度デ�
 - 再生中は`isPlaying()`がtrueを返す。
 
 ### 5.4. Startup Behavior
-- **起動時サウンド:** setup()内で`soundManager.playPon()`を再生（起動完了通知）。
-- **Grace Period:** 起動後10秒間は全警告を抑制（電圧警告、LED警告、ビープ音）。
+- **起動時サウンド:** setup()内で`soundManager.playPon()`を再生し、完了を待機（起動完了通知）。
+- **Grace Period:** 起動音再生完了後、10秒間のdelay()で待機。この間に表示は"Waiting for sensors..."メッセージを表示。
+- **実装:** setup()の最後にdelay(10000)を実行することで、警告システムが起動しないようにする単純な実装。
 
 ### 5.5. Defensive Coding Constraints
 1.  **Startup Grace Period:**
-    - For the first **10 seconds** after boot, suppress ALL warnings (Voltage Red, LED Red, Beep Sounds) to avoid noise during engine cranking and system stabilization.
+    - For the first **10 seconds** after boot (implemented as delay(10000) at end of setup()), suppress ALL warnings to avoid noise during engine cranking and system stabilization.
 2.  **Resource Management:**
-    - `SoundManager`はスピーカー設定を最適化（task_priority=2, task_pinned_core=1）。
-    - `AudioVisualizer`はpause/resume機能により、I2Sリソース競合を回避。
-    - **現在の実装:** AudioVisualizerは実装されているが、メインループには組み込まれていない。
+    - `SoundManager`はM5Unifiedのスピーカー機能を使用。
+    - **現在の実装:** AudioVisualizerクラスは存在していない（過去の実装から削除済み）。
 3.  **Non-blocking Update:**
     - 全てのコンポーネントは`update()`メソッドにより非同期更新。
-    - `delay()`の使用を最小化（メインループに10msのみ）。
+    - `delay()`の使用は最小限（setup内の10秒待機と、メインループに10msのみ）。
 
 ## 6. Display Refresh Strategy
 - **Component Update:** 毎ループでcanManager, co2Sensor, soundManagerをupdate()。
-- **Throttle Graph:** 500ms間隔でデータ追加と描画（main.cppで管理）。
-- **Display Push:** 33ms間隔（約30fps）で全スプライトをディスプレイにpush。
+- **Display Zone Update:** 毎ループで各ゾーンのスプライトを更新。
+- **Throttle Graph:** 500ms間隔でデータ追加と描画（GRAPH_UPDATE_INTERVAL_MS = 500）。
+- **Display Push:** 33ms間隔（DISPLAY_UPDATE_INTERVAL_MS = 33、約30fps）で全スプライトをディスプレイにpush。
 - **Performance Optimization:** スプライト使用により、チラツキ防止と高速描画を実現。
 
-## 7. Current Status & Notes
-- **AudioVisualizer:** 実装済みだが、現在UIには組み込まれていない。将来的にThrottleGraphと切り替え可能にする予定。
-- **ThrottleGraph:** AudioVisualizerの代替として実装。音声リソースを使用せず、アクセル開度の可視化を提供。
-- **CAN Debug:** 詳細なステータスロギングを実装（10秒間隔でデバッグ情報を出力）。
+## 7. Implementation Details
+
+### 7.1. CAN Manager Details
+- **Pin Configuration:** TX=17 (const int CAN_TX_PIN), RX=18 (const int CAN_RX_PIN)
+- **PIDs:**
+  - PID_COOLANT_TEMP = 0x05
+  - PID_THROTTLE_POS = 0x49
+  - PID_CONTROL_MODULE_VOLTAGE = 0x42
+- **OBD2 IDs:**
+  - OBD2_REQUEST_ID = 0x7DF
+  - OBD2_RESPONSE_ID = 0x7E8 (also accepts 0x7E8-0x7EF range)
+- **Timing:**
+  - REQUEST_INTERVAL = 200ms
+  - RESPONSE_TIMEOUT = 500ms
+  - DEBUG_INTERVAL = 2000ms
+- **Throttle Conversion:**
+  1. Raw OBD2 value converted to 0-100% using formula: `(data[3] * 100) / 255`
+  2. Re-map to compensate for sensor range:
+     - rawThrottle <= 15: output 0%
+     - rawThrottle >= 75: output 100%
+     - 15 < rawThrottle < 75: linear interpolation `((rawThrottle - 15) * 100) / 60`
+
+### 7.2. Throttle Graph Details
+- **History Size:** 320 data points (GRAPH_HISTORY_SIZE = 320)
+- **Update Interval:** 500ms (GRAPH_UPDATE_INTERVAL_MS = 500)
+- **Total History Duration:** 160 seconds (calculated as historySize * updateInterval / 1000)
+- **Graph Area:** X=0, Y=190, W=320, H=50
+
+### 7.3. CO2 Sensor Details
+- **Measurement Interval:** 5000ms (MEASUREMENT_INTERVAL = 5000)
+- **Measurement Duration:** 5000ms (MEASUREMENT_DURATION = 5000, SCD40 takes ~5s per reading)
+
+### 7.4. LED Manager Details
+- **LED Pin:** 5 (LED_PIN = 5)
+- **LED Count:** 10 LEDs (NUM_LEDS = 10)
+- **Breathing Cycle:** 3000ms (BREATHING_CYCLE_MS = 3000)
+- **Thresholds:**
+  - CO2_THRESHOLD_OFF = 1250 ppm
+  - CO2_THRESHOLD_RED = 1500 ppm
+
+## 8. Current Status & Notes
+- **ThrottleGraph:** アクセル開度の可視化を提供。GraphCanvasを使用することで、M5GFXへの直接依存を回避。
+- **CAN Debug:** デバッグフラグ（setDebugEnabled(true)）により、詳細なTWAIステータスロギングを実装（2秒間隔でステータス情報を出力）。
 - **Temperature Offset:** Co2SensorはsetTemperatureOffset()により、キャリブレーション可能。
+- **DummyCanManager:** テスト用のダミーCANマネージャーが実装されている。

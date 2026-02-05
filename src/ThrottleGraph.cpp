@@ -2,7 +2,7 @@
 #include "Display.hpp"
 #include <algorithm>
 
-// RGB565色定数の定義（M5GFXから独立）
+// RGB565 color constants definition (independent from M5GFX)）
 #define TFT_BLACK 0x0000
 #define TFT_DARKGREY 0x4208
 #define TFT_CYAN 0x07FF
@@ -26,24 +26,24 @@ void ThrottleGraph::begin(GraphCanvas *canvas, int16_t x, int16_t y, int16_t w,
   _historySize = historySize;
   _updateIntervalMs = updateIntervalMs;
 
-  // スプライトを作成（チラツキ防止）
+  // Create sprite (prevents flickering)）
   if (_canvas) {
     _canvas->createCanvas(_w, _h);
   }
 
-  // 履歴バッファを確保
+  // Allocate history buffer
   _throttleHistory.clear();
   _throttleHistory.reserve(_historySize);
 }
 
 void ThrottleGraph::addData(float throttlePercent) {
-  // 範囲を0-100%に制限
+  // Limit range to 0-100%
   throttlePercent = std::min(std::max(throttlePercent, 0.0f), 100.0f);
 
-  // データを追加
+  // Add data
   _throttleHistory.push_back(throttlePercent);
 
-  // 履歴サイズを超えたら古いデータを削除
+  // Remove old data when exceeds history size
   if (_throttleHistory.size() > _historySize) {
     _throttleHistory.erase(_throttleHistory.begin());
   }
@@ -54,21 +54,21 @@ void ThrottleGraph::draw() {
     return;
   }
 
-  // スプライトに描画（背景クリア）
+  // Draw to sprite (clear background)）
   _canvas->fillCanvas(TFT_BLACK);
 
-  // グリッドラインを描画 (25%, 50%, 75%)
+  // Draw grid lines (25%, 50%, 75%)
   _canvas->drawLine(0, _h * 3 / 4, _w, _h * 3 / 4, 0x2104); // 25%
   _canvas->drawLine(0, _h / 2, _w, _h / 2, 0x4208);         // 50%
   _canvas->drawLine(0, _h / 4, _w, _h / 4, 0x2104);         // 75%
 
-  // 底辺のベースライン
+  // Baseline at bottom
   _canvas->drawLine(0, _h - 1, _w, _h - 1, TFT_DARKGREY);
 
-  // データポイント数に応じた描画
+  // Draw according to number of data points
   int dataSize = _throttleHistory.size();
   if (dataSize < 2) {
-    // データが不足している場合は現在値のみ表示
+    // Display only current value when data is insufficient
     if (dataSize == 1) {
       float currentValue = _throttleHistory[0];
       char buf[16];
@@ -83,25 +83,25 @@ void ThrottleGraph::draw() {
     return;
   }
 
-  // データを右詰めで描画するため、開始位置を計算
+  // Calculate start position for right-aligned drawing
   int startX = 0;
   if (dataSize < _w) {
     startX = _w - dataSize;
   }
 
-  // 折れ線グラフとして描画
+  // Draw as line graph
   for (int i = 1; i < dataSize; i++) {
     float val1 = _throttleHistory[i - 1];
     float val2 = _throttleHistory[i];
 
-    // Y座標を計算（上が100%、下が0%）
+    // Calculate Y coordinates (top is 100%, bottom is 0%)）
     int y1 = _h - (int)(val1 * _h / 100.0f);
     int y2 = _h - (int)(val2 * _h / 100.0f);
 
-    // X座標を計算
+    // Calculate X coordinates
     int x1, x2;
     if (dataSize > _w) {
-      // データポイントが幅より多い場合は圧縮
+      // Compress when data points exceed width
       x1 = (i - 1) * _w / dataSize;
       x2 = i * _w / dataSize;
     } else {
@@ -109,20 +109,20 @@ void ThrottleGraph::draw() {
       x2 = startX + i;
     }
 
-    // 色を決定（最新値に基づく）
+    // Determine color (based on latest value)）
     uint16_t color = getThrottleColor(val2);
 
-    // 線を描画
+    // Draw line
     _canvas->drawLine(x1, y1, x2, y2, color);
 
-    // 線を太くするために上下に1ピクセルずつ追加
+    // Add 1 pixel above and below to thicken the line
     if (y1 > 0)
       _canvas->drawLine(x1, y1 - 1, x2, y2 - 1, color);
     if (y1 < _h - 1)
       _canvas->drawLine(x1, y1 + 1, x2, y2 + 1, color);
   }
 
-  // 現在値を右端に表示
+  // Display current value at right edge
   if (!_throttleHistory.empty()) {
     float currentValue = _throttleHistory.back();
     char buf[16];
@@ -135,7 +135,7 @@ void ThrottleGraph::draw() {
     _canvas->drawString(buf, _w - 25, 10);
   }
 
-  // スプライトをディスプレイに転送（一度の転送でチラツキ防止）
+  // Transfer sprite to display (prevents flickering with single transfer)）
   _canvas->pushToDisplay(_x, _y);
 }
 
@@ -152,10 +152,10 @@ float ThrottleGraph::getHistoryDurationSeconds() const {
 }
 
 uint16_t ThrottleGraph::getThrottleColor(float throttlePercent) {
-  // アクセル開度に応じた色
-  // 0-30%: 青系
-  // 30-60%: 緑系
-  // 60-100%: オレンジ～赤系
+  // Color according to throttle position
+  // 0-30%: Blue
+  // 30-60%: Green
+  // 60-100%: Orange to Red
 
   if (throttlePercent < 30.0f) {
     return TFT_CYAN;

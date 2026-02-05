@@ -171,17 +171,17 @@ void CanManager::parseResponse(const CanFrame &frame) {
 
   case PID_THROTTLE_POS:
     if (frame.data_length_code >= 4) {
-      // まず標準的なOBD-IIの計算式で0-100の範囲に変換
+      // First convert to 0-100 range using standard OBD-II formula
       uint8_t rawThrottle = (frame.data[3] * 100) / 255;
 
-      // 15-75の範囲を0-100%に再マッピング
-      // 15以下は0%、75以上は100%にクランプ
+      // Remap 15-75 range to 0-100%
+      // Clamp 15 and below to 0%, 75 and above to 100%
       if (rawThrottle <= 15) {
         _throttlePos = 0;
       } else if (rawThrottle >= 75) {
         _throttlePos = 100;
       } else {
-        // 線形変換: (rawThrottle - 15) / (75 - 15) * 100
+        // Linear conversion: (rawThrottle - 15) / (75 - 15) * 100
         _throttlePos = ((rawThrottle - 15) * 100) / 60;
       }
 
