@@ -8,8 +8,8 @@ const int CAN_RX_PIN = 18;
 
 CanManager::CanManager()
     : _coolantTemp(-40), _throttlePos(0), _batteryVoltage(0.0),
-      _lastRequestTime(0), _lastResponseTime(0), _currentPidIndex(0),
-      _dataValid(false) {}
+      _lastResponseTime(0), _dataValid(false), _lastCoolantTempUpdate(0),
+      _lastThrottlePosUpdate(0), _lastBatteryVoltageUpdate(0) {}
 
 bool CanManager::begin() {
   // Initialize CAN on UART Port C (TX=18, RX=17)
@@ -66,16 +66,14 @@ void CanManager::update() {
     _lastDebugTime = now;
   }
 
-  // Send periodic requests (Only if RUNNING to avoid filling queue when BusOff)
-  // For debugging "flow", we continue to request, but check status first
-  // optionally.
-  if (now - _lastRequestTime >= REQUEST_INTERVAL) {
-    uint8_t pids[] = {PID_COOLANT_TEMP, PID_THROTTLE_POS,
-                      PID_CONTROL_MODULE_VOLTAGE};
-    requestPid(pids[_currentPidIndex]);
-    _currentPidIndex = (_currentPidIndex + 1) % 3;
-    _lastRequestTime = now;
-  }
+  // Hybrid passive/active request mode:
+  // Passively listen to CAN bus for responses from other ECUs.
+  // Only actively request a PID if it hasn't been updated for
+  // PID_UPDATE_TIMEOUT.
+  checkAndRequestPid(PID_COOLANT_TEMP, _lastCoolantTempUpdate, "Coolant");
+  checkAndRequestPid(PID_THROTTLE_POS, _lastThrottlePosUpdate, "Throttle");
+  checkAndRequestPid(PID_CONTROL_MODULE_VOLTAGE, _lastBatteryVoltageUpdate,
+                     "Voltage");
 
   // Process responses
   processResponse();
@@ -92,6 +90,20 @@ bool CanManager::isDataValid() { return _dataValid; }
 void CanManager::setDebugEnabled(bool enabled) { _debugEnabled = enabled; }
 
 bool CanManager::isDebugEnabled() const { return _debugEnabled; }
+
+void CanManager::checkAndRequestPid(uint8_t pid, unsigned long &lastUpdate,
+                                    const char *name) {
+  unsigned long now = millis();
+  if (now - lastUpdate >= PID_UPDATE_TIMEOUT) {
+    if (_debugEnabled) {
+      Serial.printf(
+          "[CAN REQUEST] %s timeout - actively requesting PID 0x%02X\n", name,
+          pid);
+    }
+    requestPid(pid);
+    lastUpdate = now;
+  }
+}
 
 // ... (previous content)
 
@@ -163,6 +175,7 @@ void CanManager::parseResponse(const CanFrame &frame) {
   case PID_COOLANT_TEMP:
     if (frame.data_length_code >= 4) {
       _coolantTemp = (int16_t)frame.data[3] - 40; // Formula: A - 40
+      _lastCoolantTempUpdate = millis();          // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Coolant Temp: %d C\n", _coolantTemp);
       }
@@ -185,6 +198,7 @@ void CanManager::parseResponse(const CanFrame &frame) {
         _throttlePos = ((rawThrottle - 15) * 100) / 60;
       }
 
+      _lastThrottlePosUpdate = millis(); // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Throttle: raw=%d%%, mapped=%d%%\n", rawThrottle,
                       _throttlePos);
@@ -195,7 +209,8 @@ void CanManager::parseResponse(const CanFrame &frame) {
   case PID_CONTROL_MODULE_VOLTAGE:
     if (frame.data_length_code >= 5) {
       uint16_t raw = (frame.data[3] << 8) | frame.data[4];
-      _batteryVoltage = raw / 1000.0; // Formula: ((A * 256) + B) / 1000
+      _batteryVoltage = raw / 1000.0;       // Formula: ((A * 256) + B) / 1000
+      _lastBatteryVoltageUpdate = millis(); // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Voltage: %.2f V\n", _batteryVoltage);
       }
