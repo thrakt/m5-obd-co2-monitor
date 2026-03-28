@@ -42,7 +42,7 @@ public:
 
   // Zone update methods
   void updateHeader(float voltage, uint16_t co2);
-  void updateThrottleGauge(uint8_t throttlePercent);
+  void updateRpmGauge(uint16_t rpm);        // Replaces throttle gauge
   void updateCoolantTemp(int16_t tempC);
   void updateCabinEnv(float tempC, float humidity);
   void updateThrottleGraph(); // Throttle graph is drawn via GraphCanvas
@@ -95,7 +95,7 @@ private:
 
   // Helper methods
   uint16_t getTempColor(int16_t tempC);
-  uint16_t getThrottleColor(uint8_t percent);
+  uint16_t getRpmColor(uint16_t rpm);
   uint16_t getCO2Color(uint16_t co2);
 };
 

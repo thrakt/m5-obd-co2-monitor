@@ -15,6 +15,7 @@ public:
   int16_t getCoolantTemp();  // Celsius
   uint8_t getThrottlePos();  // Percentage
   float getBatteryVoltage(); // Volts
+  uint16_t getRpm();         // Engine RPM
 
   bool isDataValid();
 
@@ -27,6 +28,7 @@ private:
   int16_t _coolantTemp;
   uint8_t _throttlePos;
   float _batteryVoltage;
+  uint16_t _engineRpm;
 
   // State management
   unsigned long _lastResponseTime;
