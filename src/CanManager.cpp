@@ -8,9 +8,7 @@ const int CAN_RX_PIN = 18;
 
 CanManager::CanManager()
     : _coolantTemp(-40), _throttlePos(0), _batteryVoltage(0.0), _engineRpm(0),
-      _lastResponseTime(0), _dataValid(false), _lastCoolantTempUpdate(0),
-      _lastThrottlePosUpdate(0), _lastBatteryVoltageUpdate(0),
-      _lastEngineRpmUpdate(0) {}
+      _lastResponseTime(0), _dataValid(false) {}
 
 bool CanManager::begin() {
   // Initialize CAN on UART Port C (TX=18, RX=17)
@@ -68,15 +66,7 @@ void CanManager::update() {
     _lastDebugTime = now;
   }
 
-  // Hybrid passive/active request mode:
-  // Passively listen to CAN bus for responses from other ECUs.
-  // Only actively request a PID if it hasn't been updated for
-  // PID_UPDATE_TIMEOUT.
-  checkAndRequestPid(PID_COOLANT_TEMP, _lastCoolantTempUpdate, "Coolant");
-  checkAndRequestPid(PID_ENGINE_RPM, _lastEngineRpmUpdate, "RPM");
-  checkAndRequestPid(PID_THROTTLE_POS, _lastThrottlePosUpdate, "Throttle");
-  checkAndRequestPid(PID_CONTROL_MODULE_VOLTAGE, _lastBatteryVoltageUpdate,
-                     "Voltage");
+  // Passive-only mode: only listen to CAN bus without actively requesting PIDs
 
   // Process responses
   processResponse();
@@ -95,49 +85,6 @@ bool CanManager::isDataValid() { return _dataValid; }
 void CanManager::setDebugEnabled(bool enabled) { _debugEnabled = enabled; }
 
 bool CanManager::isDebugEnabled() const { return _debugEnabled; }
-
-void CanManager::checkAndRequestPid(uint8_t pid, unsigned long &lastUpdate,
-                                    const char *name) {
-  unsigned long now = millis();
-  if (now - lastUpdate >= PID_UPDATE_TIMEOUT) {
-    if (_debugEnabled) {
-      Serial.printf(
-          "[CAN REQUEST] %s timeout - actively requesting PID 0x%02X\n", name,
-          pid);
-    }
-    requestPid(pid);
-    lastUpdate = now;
-  }
-}
-
-// ... (previous content)
-
-void CanManager::requestPid(uint8_t pid) {
-  CanFrame frame;
-  frame.identifier = OBD2_REQUEST_ID;
-  frame.extd = 0;
-  frame.data_length_code = 8;
-  frame.data[0] = 0x02; // Number of additional bytes
-  frame.data[1] = 0x01; // Mode 01 (Show current data)
-  frame.data[2] = pid;  // PID
-  frame.data[3] = 0x00;
-  frame.data[4] = 0x00;
-  frame.data[5] = 0x00;
-  frame.data[6] = 0x00;
-  frame.data[7] = 0x00;
-
-  if (ESP32Can.writeFrame(frame)) {
-    if (_debugEnabled) {
-      Serial.printf("[CAN] Request sent: PID=0x%02X\n", pid);
-    }
-  } else {
-    if (_debugEnabled) {
-      Serial.printf("[CAN] Failed to send request: PID=0x%02X (Queue Full or "
-                    "Bus Error)\n",
-                    pid);
-    }
-  }
-}
 
 void CanManager::processResponse() {
   CanFrame frame;
@@ -180,7 +127,6 @@ void CanManager::parseResponse(const CanFrame &frame) {
   case PID_COOLANT_TEMP:
     if (frame.data_length_code >= 4) {
       _coolantTemp = (int16_t)frame.data[3] - 40; // Formula: A - 40
-      _lastCoolantTempUpdate = millis();          // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Coolant Temp: %d C\n", _coolantTemp);
       }
@@ -191,7 +137,6 @@ void CanManager::parseResponse(const CanFrame &frame) {
     if (frame.data_length_code >= 5) {
       // Formula: ((A * 256) + B) / 4
       _engineRpm = ((uint16_t)frame.data[3] * 256 + frame.data[4]) / 4;
-      _lastEngineRpmUpdate = millis();
       if (_debugEnabled) {
         Serial.printf("[CAN] Engine RPM: %d\n", _engineRpm);
       }
@@ -214,7 +159,6 @@ void CanManager::parseResponse(const CanFrame &frame) {
         _throttlePos = ((rawThrottle - 15) * 100) / 60;
       }
 
-      _lastThrottlePosUpdate = millis(); // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Throttle: raw=%d%%, mapped=%d%%\n", rawThrottle,
                       _throttlePos);
@@ -225,8 +169,7 @@ void CanManager::parseResponse(const CanFrame &frame) {
   case PID_CONTROL_MODULE_VOLTAGE:
     if (frame.data_length_code >= 5) {
       uint16_t raw = (frame.data[3] << 8) | frame.data[4];
-      _batteryVoltage = raw / 1000.0;       // Formula: ((A * 256) + B) / 1000
-      _lastBatteryVoltageUpdate = millis(); // Track update time
+      _batteryVoltage = raw / 1000.0; // Formula: ((A * 256) + B) / 1000
       if (_debugEnabled) {
         Serial.printf("[CAN] Voltage: %.2f V\n", _batteryVoltage);
       }

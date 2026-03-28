@@ -45,14 +45,6 @@ private:
   unsigned long _lastResponseTime; // Last response from any PID
   bool _dataValid;
 
-  // Per-PID last update tracking for hybrid passive/active mode
-  unsigned long _lastCoolantTempUpdate;
-  unsigned long _lastThrottlePosUpdate;
-  unsigned long _lastBatteryVoltageUpdate;
-  unsigned long _lastEngineRpmUpdate;
-
-  // If a PID hasn't been updated for this duration, actively request it
-  static constexpr unsigned long PID_UPDATE_TIMEOUT = 1000; // ms
   static constexpr unsigned long RESPONSE_TIMEOUT = 500;    // ms
   static constexpr unsigned long DEBUG_INTERVAL = 2000;     // ms
   unsigned long _lastDebugTime = 0;
@@ -60,9 +52,6 @@ private:
   bool _debugEnabled = false; // Debug flag
 
   // Helper methods
-  void checkAndRequestPid(uint8_t pid, unsigned long &lastUpdate,
-                          const char *name);
-  void requestPid(uint8_t pid);
   void processResponse();
   void parseResponse(const CanFrame &frame);
 };
