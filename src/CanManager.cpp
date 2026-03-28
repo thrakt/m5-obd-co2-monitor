@@ -7,9 +7,10 @@ const int CAN_RX_PIN = 18;
 } // namespace
 
 CanManager::CanManager()
-    : _coolantTemp(-40), _throttlePos(0), _batteryVoltage(0.0),
+    : _coolantTemp(-40), _throttlePos(0), _batteryVoltage(0.0), _engineRpm(0),
       _lastResponseTime(0), _dataValid(false), _lastCoolantTempUpdate(0),
-      _lastThrottlePosUpdate(0), _lastBatteryVoltageUpdate(0) {}
+      _lastThrottlePosUpdate(0), _lastBatteryVoltageUpdate(0),
+      _lastEngineRpmUpdate(0) {}
 
 bool CanManager::begin() {
   // Initialize CAN on UART Port C (TX=18, RX=17)
@@ -34,6 +35,7 @@ void CanManager::update() {
     _coolantTemp = -40; // Reset values
     _throttlePos = 0;
     _batteryVoltage = 0.0;
+    _engineRpm = 0;
   }
 
   // Debug Status Logging
@@ -71,6 +73,7 @@ void CanManager::update() {
   // Only actively request a PID if it hasn't been updated for
   // PID_UPDATE_TIMEOUT.
   checkAndRequestPid(PID_COOLANT_TEMP, _lastCoolantTempUpdate, "Coolant");
+  checkAndRequestPid(PID_ENGINE_RPM, _lastEngineRpmUpdate, "RPM");
   checkAndRequestPid(PID_THROTTLE_POS, _lastThrottlePosUpdate, "Throttle");
   checkAndRequestPid(PID_CONTROL_MODULE_VOLTAGE, _lastBatteryVoltageUpdate,
                      "Voltage");
@@ -84,6 +87,8 @@ int16_t CanManager::getCoolantTemp() { return _coolantTemp; }
 uint8_t CanManager::getThrottlePos() { return _throttlePos; }
 
 float CanManager::getBatteryVoltage() { return _batteryVoltage; }
+
+uint16_t CanManager::getRpm() { return _engineRpm; }
 
 bool CanManager::isDataValid() { return _dataValid; }
 
@@ -178,6 +183,17 @@ void CanManager::parseResponse(const CanFrame &frame) {
       _lastCoolantTempUpdate = millis();          // Track update time
       if (_debugEnabled) {
         Serial.printf("[CAN] Coolant Temp: %d C\n", _coolantTemp);
+      }
+    }
+    break;
+
+  case PID_ENGINE_RPM:
+    if (frame.data_length_code >= 5) {
+      // Formula: ((A * 256) + B) / 4
+      _engineRpm = ((uint16_t)frame.data[3] * 256 + frame.data[4]) / 4;
+      _lastEngineRpmUpdate = millis();
+      if (_debugEnabled) {
+        Serial.printf("[CAN] Engine RPM: %d\n", _engineRpm);
       }
     }
     break;

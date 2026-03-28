@@ -16,6 +16,7 @@ public:
   int16_t getCoolantTemp();  // Celsius, -40 to 215
   uint8_t getThrottlePos();  // Percentage, 0-100
   float getBatteryVoltage(); // Volts
+  uint16_t getRpm();         // Engine RPM, 0-16383
 
   bool isDataValid();
 
@@ -26,6 +27,7 @@ public:
 private:
   // OBD2 PIDs
   static constexpr uint8_t PID_COOLANT_TEMP = 0x05;
+  static constexpr uint8_t PID_ENGINE_RPM = 0x0C;
   static constexpr uint8_t PID_THROTTLE_POS = 0x49;
   static constexpr uint8_t PID_CONTROL_MODULE_VOLTAGE = 0x42;
 
@@ -37,6 +39,7 @@ private:
   int16_t _coolantTemp;
   uint8_t _throttlePos;
   float _batteryVoltage;
+  uint16_t _engineRpm;
 
   // State management
   unsigned long _lastResponseTime; // Last response from any PID
@@ -46,6 +49,7 @@ private:
   unsigned long _lastCoolantTempUpdate;
   unsigned long _lastThrottlePosUpdate;
   unsigned long _lastBatteryVoltageUpdate;
+  unsigned long _lastEngineRpmUpdate;
 
   // If a PID hasn't been updated for this duration, actively request it
   static constexpr unsigned long PID_UPDATE_TIMEOUT = 1000; // ms

@@ -119,12 +119,13 @@ void loop() {
   uint16_t co2 = co2Sensor.getCo2();
   int16_t coolantTemp = canManager.getCoolantTemp();
   uint8_t throttlePos = canManager.getThrottlePos();
+  uint16_t engineRpm = canManager.getRpm();
   float cabinTemp = co2Sensor.getTemperature();
   float cabinHumidity = co2Sensor.getHumidity();
 
   // Update display zones
   display.updateHeader(batteryVoltage, co2);
-  display.updateThrottleGauge(throttlePos);
+  display.updateRpmGauge(engineRpm);
   display.updateCoolantTemp(coolantTemp);
   display.updateCabinEnv(cabinTemp, cabinHumidity);
 

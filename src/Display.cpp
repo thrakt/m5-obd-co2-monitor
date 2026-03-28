@@ -156,36 +156,40 @@ void Display::updateHeader(float voltage, uint16_t co2) {
   _headerSprite.drawString(co2Str, HEADER_W / 2, HEADER_H / 2 + 5);
 }
 
-void Display::updateThrottleGauge(uint8_t throttlePercent) {
+void Display::updateRpmGauge(uint16_t rpm) {
   _throttleSprite.fillSprite(TFT_BLACK);
 
   int16_t centerX = THROTTLE_W / 2;
   int16_t centerY = THROTTLE_H / 2;
   int16_t radius = 60;
 
+  const uint16_t RPM_MAX = 8000;
+  float rpmClamped = (rpm > RPM_MAX) ? RPM_MAX : (float)rpm;
+
   _throttleSprite.drawCircle(centerX, centerY, radius, TFT_DARKGREY);
 
-  float angle = (throttlePercent / 100.0) * 270.0;
-  float startAngle = 135.0;
+  float angle = (rpmClamped / RPM_MAX) * 270.0f;
+  float startAngle = 135.0f;
 
-  for (int i = 0; i <= angle; i++) {
+  for (int i = 0; i <= (int)angle; i++) {
     float rad = (startAngle + i) * DEG_TO_RAD;
     int16_t x = centerX + (radius - 5) * cos(rad);
     int16_t y = centerY + (radius - 5) * sin(rad);
-    uint16_t color = getThrottleColor((i / 270.0) * 100);
+    uint16_t color = getRpmColor((uint16_t)((i / 270.0f) * RPM_MAX));
     _throttleSprite.drawCircle(x, y, 3, color);
   }
 
+  // Center: RPM numeric value
   _throttleSprite.setFont(&fonts::FreeSansBold12pt7b);
   _throttleSprite.setTextSize(1);
   _throttleSprite.setTextColor(TFT_WHITE);
-  char percentStr[8];
-  snprintf(percentStr, sizeof(percentStr), "%d%%", throttlePercent);
-  _throttleSprite.drawString(percentStr, centerX, centerY);
+  char rpmStr[12];
+  snprintf(rpmStr, sizeof(rpmStr), "%d", rpm);
+  _throttleSprite.drawString(rpmStr, centerX, centerY);
 
   _throttleSprite.setFont(&fonts::FreeSansBold9pt7b);
   _throttleSprite.setTextColor(TFT_LIGHTGREY);
-  _throttleSprite.drawString("Throttle", centerX, centerY + 30);
+  _throttleSprite.drawString("RPM", centerX, centerY + 30);
 }
 
 void Display::updateCoolantTemp(int16_t tempC) {
@@ -245,13 +249,15 @@ uint16_t Display::getTempColor(int16_t tempC) {
   }
 }
 
-uint16_t Display::getThrottleColor(uint8_t percent) {
-  if (percent < 33) {
+uint16_t Display::getRpmColor(uint16_t rpm) {
+  if (rpm < 2000) {
     return TFT_BLUE;
-  } else if (percent < 66) {
+  } else if (rpm < 4000) {
     return TFT_GREEN;
-  } else {
+  } else if (rpm < 6500) {
     return TFT_ORANGE;
+  } else {
+    return TFT_RED;
   }
 }
 
