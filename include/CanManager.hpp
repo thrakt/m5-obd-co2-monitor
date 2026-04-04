@@ -35,25 +35,53 @@ private:
   static constexpr uint32_t OBD2_REQUEST_ID = 0x7DF;
   static constexpr uint32_t OBD2_RESPONSE_ID = 0x7E8;
 
+  // Timing
+  static constexpr unsigned long RESPONSE_TIMEOUT = 200; // ms per request
+  static constexpr unsigned long DATA_TIMEOUT = 2000;    // ms until data invalid
+  static constexpr unsigned long DEBUG_INTERVAL = 2000;  // ms
+
+  // PID request state machine
+  enum class RequestState { IDLE, WAITING_RESPONSE };
+
+  // Weighted PID sequence:
+  // RPM x3, THROTTLE x3, COOLANT x1, VOLTAGE x1 per cycle
+  static constexpr uint8_t PID_SEQUENCE[] = {
+      PID_ENGINE_RPM,           // high priority
+      PID_THROTTLE_POS,         // high priority
+      PID_ENGINE_RPM,           // high priority
+      PID_THROTTLE_POS,         // high priority
+      PID_ENGINE_RPM,           // high priority
+      PID_THROTTLE_POS,         // high priority
+      PID_COOLANT_TEMP,         // low priority
+      PID_CONTROL_MODULE_VOLTAGE // low priority
+  };
+  static constexpr uint8_t PID_SEQUENCE_LEN =
+      sizeof(PID_SEQUENCE) / sizeof(PID_SEQUENCE[0]);
+
+  // State
+  RequestState _requestState;
+  uint8_t _pidIndex;           // Current index in PID_SEQUENCE
+  unsigned long _requestTime;  // When the current request was sent
+
   // Data cache
   int16_t _coolantTemp;
   uint8_t _throttlePos;
   float _batteryVoltage;
   uint16_t _engineRpm;
 
-  // State management
-  unsigned long _lastResponseTime; // Last response from any PID
+  // Validity tracking
+  unsigned long _lastResponseTime;
   bool _dataValid;
 
-  static constexpr unsigned long RESPONSE_TIMEOUT = 500;    // ms
-  static constexpr unsigned long DEBUG_INTERVAL = 2000;     // ms
   unsigned long _lastDebugTime = 0;
-
-  bool _debugEnabled = false; // Debug flag
+  bool _debugEnabled = false;
 
   // Helper methods
-  void processResponse();
+  void sendRequest(uint8_t pid);
+  bool processResponse();       // Returns true if a matching response was received
   void parseResponse(const CanFrame &frame);
+  uint8_t currentPid() const { return PID_SEQUENCE[_pidIndex]; }
+  void advancePid() { _pidIndex = (_pidIndex + 1) % PID_SEQUENCE_LEN; }
 };
 
 #endif // CAN_MANAGER_HPP
